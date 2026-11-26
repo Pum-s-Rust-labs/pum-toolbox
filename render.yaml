@@ -1,7 +1,9 @@
 services:
   - type: web
     name: pum-toolbox
-    runtime: docker
+    runtime: image
+    image:
+      url: ghcr.io/pum-s-rust-labs/pum-toolbox:latest
     plan: free
     region: singapore
     healthCheckPath: /health
@@ -12,6 +14,8 @@ services:
         value: "true"
       - key: ALLOW_PRIVATE_MONITOR_TARGETS
         value: "false"
+      - key: MAX_UPLOAD_MB
+        value: "10"
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL

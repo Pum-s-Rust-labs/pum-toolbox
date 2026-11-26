@@ -1,34 +1,48 @@
-# Hướng dẫn Deploy Miễn Phí (100% Free Tier)
+# Hướng dẫn Deploy Miễn Phí — GHCR + Render (Singapore)
 
-`pum-toolbox` được đóng gói thành **1 container Docker duy nhất** (Axum phục vụ cả API lẫn giao diện React đã build), kết nối trực tiếp tới PostgreSQL bên ngoài của bạn nên có thể deploy miễn phí cực gọn trên nhiều nền tảng.
+`pum-toolbox` dùng kiến trúc **GitHub Actions tự build Docker image → đẩy lên `ghcr.io` → Render kéo image về chạy trong ~15 giây** (100% miễn phí, không cần thẻ tín dụng, tránh hoàn toàn lỗi thiếu RAM khi biên dịch Rust trên Free Tier).
 
-## So sánh 3 lựa chọn Free tốt nhất
+## Bước 1: Chờ GitHub Actions build xong image lần đầu
 
-| Nền tảng | Chi phí / Thẻ | Điểm mạnh | Hạn chế cần biết |
-| --- | --- | --- | --- |
-| **1. Render (Khuyên dùng)** | Miễn phí, **không cần thẻ tín dụng** | Hỗ trợ sẵn `render.yaml` Blueprint, có vùng **Singapore**, HTTPS tự động, deploy tự động khi push GitHub | Service Free ngủ sau 15 phút không có truy cập (mở lại mất ~20–30s cold start; Rust khởi động rất nhanh) |
-| **2. Hugging Face Spaces (Docker)** | Miễn phí, **không cần thẻ** | Tài nguyên khủng (**2 vCPU, 16 GB RAM**), HTTPS miễn phí, ngủ sau 48 giờ không dùng | URL dạng `*.hf.space`, cần mở cổng `7860` (`PORT=7860`) |
-| **3. Koyeb (Free Web Service)** | Miễn phí (cần xác minh thẻ hoặc GitHub Student) | Vùng gần châu Á, chạy mượt Docker Rust | Có thể yêu cầu thẻ để chống spam |
+Mỗi khi push lên nhánh `main`, workflow `.github/workflows/release-image.yml` tự động build `Dockerfile` (React SPA + binary Rust `pum-api`) và đẩy lên:
 
----
+```text
+ghcr.io/pum-s-rust-labs/pum-toolbox:latest
+```
 
-## Cách 1: Deploy lên Render trong 2 phút (Khuyên dùng)
+> **Lưu ý quan trọng lần đầu**: Vào trang tổ chức `https://github.com/orgs/Pum-s-Rust-labs/packages` → chọn package `pum-toolbox` → **Package settings** → **Change visibility** → chuyển sang **Public** (nếu mặc định đang là Private) để Render kéo image không cần token.
 
-1. Đăng nhập [Render](https://render.com) bằng tài khoản GitHub (`Pum283`).
-2. Chọn **New + → Blueprint** (hoặc **Web Service → Build and deploy from a Git repository**).
-3. Chọn repo **`Pum-s-Rust-labs/pum-toolbox`** (Render sẽ tự đọc file `render.yaml` và `Dockerfile`).
-4. Điền các biến môi trường bí mật (Environment Variables):
-   - `DATABASE_URL`: `postgres://<USER>:<URL_ENCODED_PASSWORD>@<HOST>:5432/<DATABASE>?sslmode=prefer`
-   - `PUBLIC_BASE_URL`: `https://<ten-app-cua-ban>.onrender.com`
-   - `CORS_ALLOWED_ORIGINS`: `https://<ten-app-cua-ban>.onrender.com`
-   - `BOOTSTRAP_ADMIN_PASSWORD`: đặt mật khẩu mạnh cho tài khoản `superadmin`
-   - *(Render tự sinh sẵn `JWT_SECRET` dài an toàn và chạy ở vùng `singapore`)*
-5. Nhấn **Deploy** → xong là truy cập ngay bằng HTTPS!
+## Bước 2: Tạo Web Service miễn phí trên Render
 
----
+1. Đăng nhập https://render.com bằng tài khoản GitHub (`Pum283`).
+2. Chọn **New + → Web Service → Existing Image** (hoặc **New + → Blueprint** và chọn repo `Pum-s-Rust-labs/pum-toolbox` để đọc `render.yaml`).
+3. Nếu chọn **Existing Image**:
+   - **Image URL**: `ghcr.io/pum-s-rust-labs/pum-toolbox:latest`
+   - **Region**: `Singapore (Southeast Asia)`
+   - **Instance Type**: `Free`
+   - **Health Check Path**: `/health`
+4. Điền các **Environment Variables**:
+   - `APP_HOST` = `0.0.0.0`
+   - `COOKIE_SECURE` = `true`
+   - `ALLOW_PRIVATE_MONITOR_TARGETS` = `false`
+   - `MAX_UPLOAD_MB` = `10`
+   - `JWT_SECRET` = chuỗi ngẫu nhiên dài ít nhất 32 ký tự
+   - `DATABASE_URL` = chuỗi PostgreSQL (nhớ đổi ký tự `+` trong mật khẩu thành `%2B`)
+   - `PUBLIC_BASE_URL` = `https://<ten-service>.onrender.com`
+   - `CORS_ALLOWED_ORIGINS` = `https://<ten-service>.onrender.com`
+   - `BOOTSTRAP_ADMIN_EMAIL` = `admin@pumlabs.dev`
+   - `BOOTSTRAP_ADMIN_USERNAME` = `superadmin`
+   - `BOOTSTRAP_ADMIN_PASSWORD` = mật khẩu mạnh của bạn
+5. Nhấn **Deploy Web Service** — sau ~15–30 giây web sẽ online với HTTPS miễn phí!
 
-## Cách 2: Deploy lên Hugging Face Spaces (Docker, 16 GB RAM Free)
+## Bước 3 (Tuỳ chọn): Tự động redeploy mỗi lần push code mới
 
-1. Tạo Space mới trên [Hugging Face Spaces](https://huggingface.co/new-space) chọn SDK **Docker (Blank)**.
-2. Đẩy mã nguồn hoặc đồng bộ GitHub Actions lên Space, đặt biến môi trường `PORT=7860`, `DATABASE_URL`, `JWT_SECRET`, `PUBLIC_BASE_URL`, `CORS_ALLOWED_ORIGINS`, `BOOTSTRAP_ADMIN_PASSWORD` trong mục **Settings → Variables and secrets**.
-3. Khởi chạy xong ứng dụng sẵn sàng qua HTTPS và có tận 16 GB RAM cho ImageLab xử lý ảnh hàng loạt.
+1. Trên Render, mở **Settings → Deploy Hook**, sao chép URL Deploy Hook.
+2. Vào GitHub repo `Pum-s-Rust-labs/pum-toolbox` → **Settings → Secrets and variables → Actions → New repository secret**:
+   - Name: `RENDER_DEPLOY_HOOK_URL`
+   - Value: dán URL Deploy Hook từ Render.
+3. Từ đó trở đi, mỗi lần `git push main`: GitHub Actions tự build image mới lên `ghcr.io` rồi gọi thẳng Render cập nhật bản mới tự động!
+
+## Bước 4 (Tuỳ chọn): Giữ thức cho Uptime Monitor (Free 24/7)
+
+Render Free cung cấp **750 giờ/tháng** (đủ chạy 24/7 cho 1 web service), nhưng sẽ tự ngủ sau 15 phút không có request. Bạn có thể tạo 1 job miễn phí trên https://cron-job.org gọi `GET https://<ten-service>.onrender.com/health` mỗi **10 phút** để giữ worker Uptime Monitor hoạt động liên tục.
