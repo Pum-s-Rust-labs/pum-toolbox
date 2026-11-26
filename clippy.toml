@@ -1,0 +1,3 @@
+# Ngưỡng độ phức tạp khuyến nghị để giữ hàm gọn gàng, dễ đọc
+cognitive-complexity-threshold = 20
+too-many-arguments-threshold = 7
