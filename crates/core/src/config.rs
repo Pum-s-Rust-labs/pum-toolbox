@@ -1,138 +1,108 @@
-//! Cấu hình ứng dụng đọc từ biến môi trường kèm giá trị mặc định an toàn.
+//! Cấu hình hệ thống đọc từ biến môi trường với giá trị mặc định an toàn.
 
 use std::env;
 
-use serde::{Deserialize, Serialize};
+use crate::error::{AppError, AppResult};
 
-use crate::error::{CoreError, CoreResult};
-
-/// Môi trường vận hành của ứng dụng.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum Environment {
-    /// Môi trường phát triển cục bộ.
-    #[default]
-    Development,
-    /// Môi trường kiểm thử / staging.
-    Staging,
-    /// Môi trường vận hành thực tế.
-    Production,
-}
-
-impl Environment {
-    /// Phân tích chuỗi tên môi trường thành `Environment`.
-    pub fn parse(value: &str) -> CoreResult<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "dev" | "development" => Ok(Self::Development),
-            "staging" | "stage" => Ok(Self::Staging),
-            "prod" | "production" => Ok(Self::Production),
-            other => Err(CoreError::InvalidConfig {
-                key: "APP_ENV".to_owned(),
-                reason: format!(
-                    "giá trị `{other}` không được hỗ trợ (dùng development, staging, hoặc production)"
-                ),
-            }),
-        }
-    }
-}
-
-/// Cấu hình cơ bản dùng chung cho mọi nền tảng (CLI, Web, Desktop, Mobile).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Cấu hình chạy của server `pum-toolbox`.
+#[derive(Debug, Clone)]
 pub struct AppConfig {
-    /// Tên hiển thị của ứng dụng.
     pub app_name: String,
-    /// Môi trường chạy hiện tại.
-    pub environment: Environment,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            app_name: "pum-rust-app".to_owned(),
-            environment: Environment::Development,
-        }
-    }
+    pub host: String,
+    pub port: u16,
+    pub public_base_url: String,
+    pub cors_allowed_origins: Vec<String>,
+    pub database_url: String,
+    pub jwt_secret: String,
+    pub jwt_access_ttl_secs: i64,
+    pub refresh_token_ttl_days: i64,
+    pub cookie_secure: bool,
+    pub bootstrap_admin_email: Option<String>,
+    pub bootstrap_admin_username: Option<String>,
+    pub bootstrap_admin_password: Option<String>,
+    pub allow_private_monitor_targets: bool,
+    pub max_upload_bytes: usize,
 }
 
 impl AppConfig {
-    /// Đọc cấu hình từ biến môi trường của tiến trình hiện tại.
-    pub fn from_env() -> CoreResult<Self> {
-        Self::from_lookup(|key| env::var(key).ok())
+    /// Đọc cấu hình từ biến môi trường tiến trình hiện tại.
+    pub fn from_env() -> AppResult<Self> {
+        Self::from_lookup(|k| env::var(k).ok())
     }
 
-    /// Đọc cấu hình từ một hàm tra cứu bất kỳ (thuận tiện cho unit test và nền tảng nhúng).
-    pub fn from_lookup<F>(lookup: F) -> CoreResult<Self>
+    /// Đọc cấu hình qua closure tra cứu (hỗ trợ unit test an toàn).
+    pub fn from_lookup<F>(lookup: F) -> AppResult<Self>
     where
         F: Fn(&str) -> Option<String>,
     {
-        let defaults = Self::default();
+        let database_url = lookup("DATABASE_URL")
+            .filter(|v| !v.trim().is_empty())
+            .ok_or_else(|| {
+                AppError::Validation("thiếu biến môi trường bắt buộc `DATABASE_URL`".to_owned())
+            })?;
 
-        let app_name = match lookup("APP_NAME") {
-            Some(name) if name.trim().is_empty() => {
-                return Err(CoreError::InvalidConfig {
-                    key: "APP_NAME".to_owned(),
-                    reason: "không được để trống".to_owned(),
-                });
-            }
-            Some(name) => name.trim().to_owned(),
-            None => defaults.app_name,
-        };
+        let jwt_secret = lookup("JWT_SECRET")
+            .filter(|v| v.len() >= 32)
+            .ok_or_else(|| {
+                AppError::Validation(
+                    "biến `JWT_SECRET` bắt buộc phải có độ dài tối thiểu 32 ký tự".to_owned(),
+                )
+            })?;
 
-        let environment = match lookup("APP_ENV") {
-            Some(env_value) => Environment::parse(&env_value)?,
-            None => defaults.environment,
-        };
+        let port = lookup("PORT")
+            .or_else(|| lookup("APP_PORT"))
+            .map(|v| {
+                v.parse::<u16>()
+                    .map_err(|_| AppError::Validation("`PORT`/`APP_PORT` không hợp lệ".to_owned()))
+            })
+            .transpose()?
+            .unwrap_or(8080);
+
+        let jwt_access_ttl_secs = lookup("JWT_ACCESS_TTL_SECS")
+            .and_then(|v| v.parse::<i64>().ok())
+            .filter(|&v| v >= 60)
+            .unwrap_or(900);
+
+        let refresh_token_ttl_days = lookup("REFRESH_TOKEN_TTL_DAYS")
+            .and_then(|v| v.parse::<i64>().ok())
+            .filter(|&v| v >= 1)
+            .unwrap_or(7);
+
+        let max_upload_mb = lookup("MAX_UPLOAD_MB")
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|&v| (1..=100).contains(&v))
+            .unwrap_or(15);
+
+        let cors_allowed_origins = lookup("CORS_ALLOWED_ORIGINS")
+            .unwrap_or_else(|| "http://localhost:5173,http://127.0.0.1:8080".to_owned())
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect();
 
         Ok(Self {
-            app_name,
-            environment,
+            app_name: lookup("APP_NAME").unwrap_or_else(|| "pum-toolbox".to_owned()),
+            host: lookup("APP_HOST").unwrap_or_else(|| "127.0.0.1".to_owned()),
+            port,
+            public_base_url: lookup("PUBLIC_BASE_URL")
+                .unwrap_or_else(|| format!("http://127.0.0.1:{port}"))
+                .trim_end_matches('/')
+                .to_owned(),
+            cors_allowed_origins,
+            database_url,
+            jwt_secret,
+            jwt_access_ttl_secs,
+            refresh_token_ttl_days,
+            cookie_secure: lookup("COOKIE_SECURE").is_some_and(|v| v.eq_ignore_ascii_case("true")),
+            bootstrap_admin_email: lookup("BOOTSTRAP_ADMIN_EMAIL").filter(|v| !v.trim().is_empty()),
+            bootstrap_admin_username: lookup("BOOTSTRAP_ADMIN_USERNAME")
+                .filter(|v| !v.trim().is_empty()),
+            bootstrap_admin_password: lookup("BOOTSTRAP_ADMIN_PASSWORD")
+                .filter(|v| !v.trim().is_empty()),
+            allow_private_monitor_targets: lookup("ALLOW_PRIVATE_MONITOR_TARGETS")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true")),
+            max_upload_bytes: max_upload_mb * 1024 * 1024,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn uses_defaults_when_env_missing() {
-        let config = AppConfig::from_lookup(|_| None).expect("default config should succeed");
-        assert_eq!(config.app_name, "pum-rust-app");
-        assert_eq!(config.environment, Environment::Development);
-    }
-
-    #[test]
-    fn parses_custom_env_values() {
-        let config = AppConfig::from_lookup(|key| match key {
-            "APP_NAME" => Some("my-tool".to_owned()),
-            "APP_ENV" => Some("production".to_owned()),
-            _ => None,
-        })
-        .expect("custom config should succeed");
-
-        assert_eq!(config.app_name, "my-tool");
-        assert_eq!(config.environment, Environment::Production);
-    }
-
-    #[test]
-    fn rejects_invalid_environment() {
-        let err = AppConfig::from_lookup(|key| match key {
-            "APP_ENV" => Some("unknown".to_owned()),
-            _ => None,
-        })
-        .expect_err("invalid APP_ENV should return error");
-
-        assert!(matches!(err, CoreError::InvalidConfig { key, .. } if key == "APP_ENV"));
-    }
-
-    #[test]
-    fn rejects_blank_app_name() {
-        let err = AppConfig::from_lookup(|key| match key {
-            "APP_NAME" => Some("   ".to_owned()),
-            _ => None,
-        })
-        .expect_err("blank APP_NAME should return error");
-
-        assert!(matches!(err, CoreError::InvalidConfig { key, .. } if key == "APP_NAME"));
     }
 }

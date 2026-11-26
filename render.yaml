@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: pum-toolbox
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ALLOW_PRIVATE_MONITOR_TARGETS
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        value: admin@pumlabs.dev
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        value: superadmin
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false

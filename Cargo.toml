@@ -2,7 +2,10 @@
 resolver = "3"
 members = [
     "crates/core",
-    "crates/app",
+    "crates/security",
+    "crates/db",
+    "crates/modules",
+    "crates/api",
 ]
 
 [workspace.package]
@@ -10,22 +13,58 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-repository = "https://github.com/Pum-s-Rust-labs/rust-base-template"
+repository = "https://github.com/Pum-s-Rust-labs/pum-toolbox"
 authors = ["Pum's Rust Labs"]
 
 [workspace.dependencies]
 # Internal workspace crates
-app-core = { path = "crates/core" }
+pum-core = { path = "crates/core" }
+pum-security = { path = "crates/security" }
+pum-db = { path = "crates/db" }
+pum-modules = { path = "crates/modules" }
 
-# Error handling
-anyhow = "1"
-thiserror = "2"
+# Async runtime & web framework
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+axum = { version = "0.8", features = ["multipart", "macros"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "fs", "limit", "set-header", "compression-gzip"] }
 
-# Serialization
+# Database (PostgreSQL, pure Rust TLS via rustls + ring)
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "chrono", "json", "migrate", "macros"] }
+
+# Security & crypto
+argon2 = "0.5"
+password-hash = { version = "0.5", features = ["std", "getrandom"] }
+jsonwebtoken = "9"
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+dashmap = "6"
+
+# HTTP client & URL
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json", "gzip"] }
+url = { version = "2", features = ["serde"] }
+
+# Feature crates (QR, Markdown/XSS, Image/Rayon/ZIP)
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+pulldown-cmark = "0.13"
+ammonia = "4"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+rayon = "1.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+# Serialization, types, errors, config, logging
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Observability / logging
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+anyhow = "1"
+thiserror = "2"
+dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
@@ -37,6 +76,9 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+doc_markdown = "allow"
 
 [profile.release]
 lto = "thin"

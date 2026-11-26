@@ -1,67 +1,66 @@
-# rust-base-template
+# Pum Toolbox
 
-Source base chuẩn bằng ngôn ngữ **Rust** cho các dự án thuộc tổ chức **[Pum's Rust Labs](https://github.com/Pum-s-Rust-labs)**.
+Nền tảng web **All-in-One Dev & Ops Suite** viết bằng **Rust (Axum + Tokio + SQLx PostgreSQL)** + **React / Vite / TypeScript / Tailwind CSS**, thuộc tổ chức **[Pum's Rust Labs](https://github.com/Pum-s-Rust-labs)**.
 
-Template này dùng kiến trúc **Cargo Workspace** gọn nhẹ, dễ tiếp cận cho người mới bắt đầu với Rust nhưng vẫn đủ chuẩn mực để mở rộng sang **CLI tool, Web backend, ứng dụng Windows/Desktop, WebAssembly và Mobile**.
+## 4 Module tích hợp
 
-## Cấu trúc thư mục
+1. **Shortlink & Analytics**: Rút gọn link (tự sinh hoặc custom slug), mật khẩu bảo vệ (Argon2id), hạn sử dụng, sinh mã **QR SVG**, redirect `/r/:slug`, thống kê click 14 ngày & theo thiết bị.
+2. **Uptime Monitor Real-time**: Theo dõi HTTP/API định kỳ bằng worker bất đồng bộ **Tokio**, đo độ trễ, đẩy cập nhật trực tiếp qua **Server-Sent Events (SSE)** và bảo vệ bằng **SSRF Guard** (chặn IP nội bộ / cloud metadata).
+3. **Code & Markdown Pastebin**: Lưu snippet/ghi chú Markdown render HTML đã lọc **XSS (`ammonia`)**, gắn tag, tìm kiếm, hỗ trợ hết hạn theo thời gian và **tự hủy sau N lượt xem (burn-after-reading)**.
+4. **ImageLab (Rayon Parallel)**: Xử lý song song đa nhân CPU nhiều ảnh cùng lúc — nén, chuyển đổi định dạng (**WebP / JPEG / PNG**), resize, grayscale, watermark, tự đóng gói `.zip` và bảo vệ chống *decompression bomb* + kiểm tra magic bytes.
+
+## Xác thực, Phân quyền Đa tầng (3-Tier RBAC) & Bảo mật
+
+- **Mật khẩu**: Argon2id kèm salt CSPRNG và chính sách độ mạnh mật khẩu + tự khóa 15 phút sau 5 lần sai liên tiếp.
+- **Token 2 lớp**: JWT Access Token ngắn hạn + Refresh Token 256-bit lưu trong cookie `HttpOnly; SameSite=Lax`, xoay vòng token (rotation) và tự thu hồi toàn bộ family khi phát hiện replay attack.
+- **Phân quyền đa tầng**:
+  - **Tầng 1 (Role Hierarchy)**: `super_admin` > `admin` > `member` > `viewer`.
+  - **Tầng 2 (Granular Permissions)**: 13 quyền hạt mịn (`links:read/write/delete_any`, `monitors:...`, `pastes:...`, `images:process`, `users:manage`, `roles:assign`, `audit:read`) hỗ trợ **override riêng cho từng user**.
+  - **Tầng 3 (Ownership & Visibility)**: Kiểm soát theo chủ sở hữu `owner_id` và phạm vi `private` / `internal` / `public`.
+- **Audit Logging**: Ghi lại đầy đủ thao tác đăng nhập, đổi quyền, khóa tài khoản, tạo/xóa tài nguyên vào bảng `audit_logs`.
+- **Security Headers & Rate Limiting**: Sliding-window rate limiter trên `DashMap`, CORS whitelist, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`.
+
+## Cấu trúc dự án
 
 ```text
-rust-base-template/
-├── .github/
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/ci.yml        # Tự động kiểm tra fmt, clippy, build & test (Linux + Windows)
+pum-toolbox/
+├── migrations/              # SQLx PostgreSQL migrations (tự động chạy khi khởi động)
 ├── crates/
-│   ├── core/                   # Crate thư viện `app-core`: logic nghiệp vụ, config, error handling
-│   └── app/                    # Crate binary `app`: điểm khởi chạy mẫu dùng tracing + anyhow
-├── docs/
-│   └── ARCHITECTURE.md         # Hướng dẫn mở rộng sang Web, CLI, Windows app, Mobile app
-├── Cargo.toml                  # Cấu hình Cargo Workspace, dependencies & lints dùng chung
-├── rust-toolchain.toml         # Khóa kênh stable kèm rustfmt và clippy
-├── rustfmt.toml                # Quy chuẩn format code
-├── clippy.toml                 # Quy chuẩn lint
-└── .env.example                # Biến môi trường mẫu
+│   ├── core/                # Domain models, 3-Tier RBAC policy engine, validators
+│   ├── security/            # Argon2id, JWT/Refresh, SSRF Guard, XSS Sanitizer, RateLimiter
+│   ├── db/                  # PostgreSQL pool & repositories (sqlx)
+│   ├── modules/             # Nghiệp vụ Shortlink, Monitor Worker, ImageLab (Rayon/ZIP)
+│   └── api/                 # Axum HTTP server, SSE, security middleware, SPA serving
+└── web/                     # React + Vite + TypeScript + Tailwind CSS
 ```
 
-## Tính năng có sẵn
+## Hướng dẫn chạy cục bộ
 
-- **Cargo Workspace (Rust 2024 edition)**: quản lý tập trung phiên bản, dependencies và lints (`clippy::pedantic`, `unsafe_code = "forbid"`).
-- **Xử lý lỗi chuẩn Rust**: `thiserror` ở tầng thư viện (`app-core`) và `anyhow` ở tầng ứng dụng (`app`).
-- **Logging có cấu trúc**: `tracing` + `tracing-subscriber` hỗ trợ lọc log bằng biến môi trường `RUST_LOG`.
-- **Cấu hình an toàn & dễ test**: đọc cấu hình qua `AppConfig::from_env()` kèm unit test chuẩn.
-- **GitHub Actions CI**: tự động kiểm tra `cargo fmt`, `cargo clippy`, `cargo test` và `cargo build` trên cả **Ubuntu** và **Windows**.
-
-## Cách sử dụng làm dự án mới
-
-1. Nhấn **Use this template** → **Create a new repository** trên GitHub trong tổ chức `Pum-s-Rust-labs`.
-2. Clone repository mới về máy:
+1. Sao chép cấu hình mẫu và điền chuỗi kết nối PostgreSQL:
    ```bash
-   git clone https://github.com/Pum-s-Rust-labs/<ten-du-an-moi>.git
-   cd <ten-du-an-moi>
+   cp .env.example .env
    ```
-3. Cập nhật thông tin dự án trong `Cargo.toml` (`repository`, tên crate nếu cần) và viết lại `README.md`.
-4. Xem thêm [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) khi muốn thêm crate mới cho Web, Desktop hoặc Mobile.
+2. Build giao diện frontend (để Axum phục vụ chung trên 1 cổng `8080`):
+   ```bash
+   cd web
+   pnpm install
+   pnpm build
+   cd ..
+   ```
+3. Khởi động máy chủ Rust (tự chạy PostgreSQL migrations & tạo tài khoản `SuperAdmin` ban đầu):
+   ```bash
+   cargo run -p pum-api
+   ```
+   Mở trình duyệt tại `http://127.0.0.1:8080`.
+   *(Khi phát triển frontend với hot-reload, có thể chạy thêm `pnpm dev` trong `web/` tại `http://localhost:5173` — đã cấu hình proxy tự động tới cổng `8080`.)*
 
-## Các lệnh Cargo thường dùng
+## Kiểm tra chất lượng
 
 ```bash
-# Chạy ứng dụng mẫu
-cargo run -p app
-
-# Chạy ứng dụng với log debug
-RUST_LOG=debug cargo run -p app
-
-# Chạy toàn bộ unit test trong workspace
-cargo test --workspace
-
-# Format code theo chuẩn rustfmt.toml
-cargo fmt --all
-
-# Kiểm tra lỗi tiềm ẩn và gợi ý cải thiện bằng Clippy
+cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-
-# Build bản release tối ưu dung lượng & tốc độ
-cargo build --release --workspace
+cargo test --workspace
+cd web && pnpm build
 ```
 
 ## Giấy phép

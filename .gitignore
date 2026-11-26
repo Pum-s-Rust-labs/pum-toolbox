@@ -3,6 +3,11 @@
 **/*.rs.bk
 *.pdb
 
+# Frontend dependencies & builds
+/web/node_modules
+/web/dist
+/web/.vite
+
 # Environment & secrets
 .env
 .env.*

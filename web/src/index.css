@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}
+
+.markdown-body h1 { @apply text-2xl font-bold mt-4 mb-2 text-white; }
+.markdown-body h2 { @apply text-xl font-semibold mt-4 mb-2 text-slate-100; }
+.markdown-body h3 { @apply text-lg font-semibold mt-3 mb-1.5 text-slate-200; }
+.markdown-body p { @apply my-2 leading-relaxed text-slate-300; }
+.markdown-body ul { @apply list-disc pl-6 my-2 space-y-1 text-slate-300; }
+.markdown-body ol { @apply list-decimal pl-6 my-2 space-y-1 text-slate-300; }
+.markdown-body code { @apply px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 text-sm font-mono; }
+.markdown-body pre { @apply p-3 rounded-lg bg-slate-950 border border-slate-800 overflow-x-auto my-3; }
+.markdown-body pre code { @apply bg-transparent p-0 text-slate-200; }
+.markdown-body a { @apply text-sky-400 underline hover:text-sky-300; }
+.markdown-body blockquote { @apply border-l-4 border-sky-500 pl-3 italic text-slate-400 my-2; }
+.markdown-body table { @apply w-full border-collapse my-3 text-sm; }
+.markdown-body th, .markdown-body td { @apply border border-slate-700 px-3 py-1.5 text-left; }
+.markdown-body th { @apply bg-slate-800/80 text-slate-200 font-semibold; }
