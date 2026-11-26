@@ -40,5 +40,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Render Deploy Hook (optional)
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
-        run: curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL not configured; skipping webhook trigger."
+          fi
